@@ -1,0 +1,6 @@
+"""tedge Can reader"""
+
+from .reader import main
+
+if __name__ == "__main__":
+    main()

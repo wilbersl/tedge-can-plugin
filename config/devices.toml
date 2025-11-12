@@ -1,0 +1,32 @@
+[[device]]
+name = "connectedge_test_device - test"
+[[device.registers]]
+number = "0xA1"
+input = false
+divisor = 1
+unit = ""
+decimalPlaces = 0
+offset = 0
+multiplier = 1
+startBit = 0
+noBits = 64
+name = "Test"
+signed = false
+id = "7292838253431274"
+measurementmapping.templatestring="{\"Test\":{\"Int64\":%% }}" 
+
+[[device.registers]]
+number = "0xA2"
+input = false
+divisor = 1
+unit = ""
+decimalPlaces = 0
+offset = 0
+multiplier = 1
+startBit = 0
+noBits = 32
+datatype = "float"
+name = "Test"
+signed = true
+id = "7292838253431274"
+measurementmapping.templatestring="{\"Test\":{\"float32\":%% }}" 

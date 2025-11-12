@@ -1,0 +1,8 @@
+[can]
+transmitrate = 5
+baudrate = 500000
+loglevel = "DEBUG"
+
+[thinedge]
+mqtthost = "127.0.0.1"
+mqttport = 1883
