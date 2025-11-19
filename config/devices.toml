@@ -1,5 +1,7 @@
 [[device]]
-name = "connectedge_test_device - test"
+name = "connectedge_test_device"
+channel = "can0"
+
 [[device.registers]]
 number = "0xA1"
 input = false
@@ -13,7 +15,9 @@ noBits = 64
 name = "Test"
 signed = false
 id = "7292838253431274"
-measurementmapping.templatestring="{\"Test\":{\"Int64\":%% }}" 
+measurementmapping.templatestring="{\"Waterpump\":{\"Temperature\":%% }}" 
+eventmapping.text="This event should be created on value change"
+eventmapping.type="TestEvent"
 
 [[device.registers]]
 number = "0xA2"
@@ -24,9 +28,8 @@ decimalPlaces = 0
 offset = 0
 multiplier = 1
 startBit = 0
-noBits = 32
-datatype = "float"
+noBits = 16
 name = "Test"
 signed = true
 id = "7292838253431274"
-measurementmapping.templatestring="{\"Test\":{\"float32\":%% }}" 
+measurementmapping.templatestring="{\"Waterpump\":{\"Power\":%% }}" 

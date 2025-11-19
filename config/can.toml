@@ -1,8 +1,13 @@
-[can]
-transmitrate = 5
-baudrate = 500000
-loglevel = "DEBUG"
+[[can]]
+channel = "can0"
+bustype = "socketcan"
+bitrate = 500000
 
 [thinedge]
 mqtthost = "127.0.0.1"
 mqttport = 1883
+
+[service]
+loglevel = "DEBUG"
+transmitrate = 5
+combinemeasurements = true
