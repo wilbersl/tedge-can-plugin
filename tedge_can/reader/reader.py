@@ -8,92 +8,21 @@ import sched
 import sys
 import threading
 import time
-import copy
 
 import tomli
 from paho.mqtt import client as mqtt_client
-import can
 
 from watchdog.events import FileSystemEventHandler, DirModifiedEvent, FileModifiedEvent
 from watchdog.observers import Observer
 
 from .banner import BANNER
 from .mapper import MappedMessage, CanMapper
+from .can_listener import CanBusBuffer
 
 
 DEFAULT_FILE_DIR = "/etc/tedge/plugins/can"
 BASE_CONFIG_NAME = "can.toml"
 DEVICES_CONFIG_NAME = "devices.toml"
-
-class CanBusReader:
-    """
-    CAN-Bus Reader, der kontinuierlich Nachrichten liest,
-    ein Dictionary mit den neuesten Daten je CAN-ID pflegt
-    und auch Nachrichten senden kann.
-    """
-
-    def __init__(self, channel="can0", bustype="socketcan", bitrate=500000):
-        self.bus = can.interface.Bus(channel=channel, bustype=bustype, bitrate=bitrate)
-        self.latest_messages: dict[int, dict[str, object]] = {}
-        self.running = False
-        self.thread: threading.Thread | None = None
-        self._lock = threading.Lock()
-
-    def start(self):
-        """Startet den Reader-Thread"""
-        if not self.running:
-            self.running = True
-            self.thread = threading.Thread(target=self._read_loop, daemon=True)
-            self.thread.start()
-
-    def stop(self):
-        """Stoppt den Reader-Thread"""
-        self.running = False
-        if self.thread:
-            self.thread.join()
-
-    def _read_loop(self) -> None:
-        """Endlos-Loop zum Lesen von CAN-Nachrichten"""
-        while self.running:
-            msg = self.bus.recv(timeout=1.0)
-            if msg:
-#                msg_dict = {
-#                    "data": msg.data,
-#                    "timestamp": msg.timestamp,
-#                }
-                with self._lock:
-                    self.latest_messages[msg.arbitration_id] = msg
-
-    def get_latest(self, can_id):
-        """Gibt die letzte Nachricht einer CAN-ID zurück (oder None)"""
-        with self._lock: # thread-safe read
-            return self.latest_messages.get(can_id)
-
-    def get_all_latest(self) -> dict[int, dict[str, object]]:
-        """
-        Gibt eine tiefe Kopie aller aktuell gespeicherten Nachrichten zurück.
-
-        Returns:
-            dict: Tiefenkopie von self.latest_messages
-        """
-        with self._lock:  # thread-safe read
-            return copy.deepcopy(self.latest_messages)
-
-    def send_message(self, can_id: int, data: bytes):
-        """
-        Sendet eine CAN-Nachricht.
-
-        Args:
-            can_id (int): Ziel-CAN-ID
-            data (bytes): Payload (max. 8 Byte bei Standard-CAN)
-        """
-        msg = can.Message(arbitration_id=can_id, data=data, is_extended_id=False)
-        try:
-            self.bus.send(msg)
-            return True
-        except can.CanError as e:
-            print(f"Sendefehler: {e}")
-            return False
 
 class CanPoll:
     """Can Poller"""
@@ -121,7 +50,7 @@ class CanPoll:
     base_config = {}
     devices = []
     config_dir = "."
-    canReader = CanBusReader()
+    canBusBuffers = {}
 
     def __init__(self, config_dir=".", logfile=None):
         self.config_dir = config_dir
@@ -136,7 +65,6 @@ class CanPoll:
             )
             self.logger.addHandler(fh)
         self.print_banner()
-        self.canReader.start()
 
     def reread_config(self):
         """Reread the configuration"""
@@ -148,7 +76,7 @@ class CanPoll:
         if len(new_base_config) > 1 and new_base_config != self.base_config:
             restart_required = True
             self.base_config = new_base_config
-        loglevel = self.base_config["can"]["loglevel"] or "INFO"
+        loglevel = self.base_config["service"]["loglevel"] or "INFO"
         self.logger.setLevel(getattr(logging, loglevel.upper(), logging.INFO))
         new_devices = self.read_device_definition(
             f"{self.config_dir}/{DEVICES_CONFIG_NAME}"
@@ -171,9 +99,17 @@ class CanPoll:
             self.register_child_devices(self.devices)
             self.register_service()
             self.update_base_config_on_device(self.base_config)
-            self.canReader.stop()
-            self.canReader = CanBusReader(bitrate=self.base_config["can"].get("baudrate", 500000))
-            self.canReader.start()
+            # Reregister CAN bus interfaces
+            while self.canBusBuffers:
+                self.canBusBuffers.popitem()[1].stop()
+            for interface in self.base_config["can"]:
+                try:
+                    connection = CanBusBuffer(channel = interface["channel"],bustype= interface["bustype"], bitrate=interface["bitrate"])
+                    connection.start()
+                    self.canBusBuffers[interface["channel"]] = connection
+                except Exception as err:
+                    self.logger.error("CAN interface configuration problem: %s", err)
+            # Rerun data polling
             for evt in self.poll_scheduler.queue:
                 self.poll_scheduler.cancel(evt)
             self.poll_data()
@@ -194,11 +130,11 @@ class CanPoll:
     def print_banner(self):
         """Print the application banner"""
         self.logger.info(BANNER)
-        self.logger.info("Author:        Rina,Mario,Murat")
-        self.logger.info("Date:          12th October 2022")
+        self.logger.info("Author:        Lucas, Philipp")
+        self.logger.info("Date:          12th November 2025")
         self.logger.info(
             "Description:   "
-            "A service that extracts data from a Modbus Server "
+            "A service that sniffs data from a CAN interface "
             "and sends it to a local thin-edge.io broker."
         )
         self.logger.info(
@@ -216,23 +152,21 @@ class CanPoll:
         self.logger.debug("Processing data for device %s", device["name"])
         device_combine_measurements = device.get(
             "combinemeasurements",
-            self.base_config["can"].get("combinemeasurements", False),
+            self.base_config["service"].get("combinemeasurements", False),
         )
         combined_measuerement = None
-        canData = self.canReader.get_all_latest()
-        if device.get("registers") is not None:
+        canBusBuffer = self.canBusBuffers.get(device.get("channel"))
+        if device.get("registers") is not None and canBusBuffer is not None:
+            canData = canBusBuffer.get_all_latest()
             for register_definition in device["registers"]:
-                self.logger.debug("CanData: %s", canData)
                 try:
                     msg_id = int(register_definition["number"],base=16)
                     result = canData.get(msg_id, None)
-                    self.logger.debug("Read CAN data for ID %s: %s", msg_id, result)
+                    self.logger.debug("Data: %s", str(result))
                     if result is not None:
                         msgs, temp = mapper.map_register(
-                            result, register_definition, device_combine_measurements
+                            result["data"], register_definition, device_combine_measurements
                         )
-                        self.logger.debug("Mapped messages: %s", msgs)
-                        self.logger.debug("Mapped messages: %s", temp)
                         if combined_measuerement is not None and temp is not None:
                             combined_measuerement.extend_data(temp)
                         elif temp is not None:
@@ -250,7 +184,7 @@ class CanPoll:
                 self.logger.error("Failed to send combined measurement: %s", e)
 
         interval = device.get(
-            "transmitrate", self.base_config["can"]["transmitrate"]
+            "transmitrate", self.base_config["service"]["transmitrate"]
         )
         self.poll_scheduler.enter(
             interval,
@@ -278,7 +212,7 @@ class CanPoll:
             return {}
 
     def start_polling(self):
-        """Start watching the configuration files and start polling the Modbus server"""
+        """Start watching the configuration files and start polling the CAN server"""
         self.reread_config()
         file_watcher_thread = threading.Thread(
             target=self.watch_config_files, args=[self.config_dir]
@@ -296,34 +230,6 @@ class CanPoll:
             topic=msg.topic, payload=msg.data, retain=retain, qos=qos
         )
 
-    def on_connect(
-        self, client, userdata, flags, rc
-    ):  # pylint: disable=unused-argument
-        """Callback for when the client receives a CONNACK response from the server"""
-        if rc == 0:
-            self.logger.debug("Connected to MQTT broker successfully")
-        else:
-            self.logger.error("Failed to connect to MQTT broker, return code %d", rc)
-
-    def on_message(self, client, userdata, msg):  # pylint: disable=unused-argument
-        """Callback for when a PUBLISH message is received from the server"""
-        try:
-            topic = msg.topic
-            payload = msg.payload.decode("utf-8")
-            self.logger.debug("Received message on topic %s: %s", topic, payload)
-            self._handle_subscribed_message(topic, payload)
-        except Exception as e:
-            self.logger.error("Error processing subscribed message: %s", e)
-
-    def on_disconnect(self, client, userdata, rc):  # pylint: disable=unused-argument
-        """Callback for when the client disconnects from the broker"""
-        if rc != 0:
-            self.logger.warning(
-                "Unexpected disconnection from MQTT broker, return code %d", rc
-            )
-        else:
-            self.logger.debug("Disconnected from MQTT broker")
-
     def connect_to_tedge(self):
         """Connect to the thin-edge.io MQTT broker and return a connected MQTT client"""
         while True:
@@ -333,16 +239,8 @@ class CanPoll:
                 client_id = "can-client"
                 client = mqtt_client.Client(client_id)
 
-                # Set up callbacks
-                client.on_connect = self.on_connect
-                client.on_message = self.on_message
-                client.on_disconnect = self.on_disconnect
-
                 client.connect(broker, port)
                 self.logger.debug("Connected to MQTT broker at %s:%d", broker, port)
-
-                # Start the network loop to handle callbacks
-                client.loop_start()
 
                 return client
             except Exception as e:
@@ -353,9 +251,11 @@ class CanPoll:
         """Update the base configuration"""
         self.logger.debug("Update base config on device")
         topic = "te/device/main///twin/c8y_CanConfiguration"
-        transmit_rate = base_config["can"].get("transmitinterval")
+        transmit_rate = base_config["service"].get("transmitrate")
+        baud_rate = base_config["can"][0].get("bitrate")
         config = {
-            "transmitRate": transmit_rate
+            "transmitRate": transmit_rate,
+            "baudRate": baud_rate,
         }
         self.send_tedge_message(
             MappedMessage(json.dumps(config), topic), retain=True, qos=1
@@ -407,7 +307,6 @@ def main():
     except Exception as main_err:
         logging.error("Unexpected error. %s", main_err, exc_info=True)
         sys.exit(1)
-
 
 if __name__ == "__main__":
     main()
