@@ -1,0 +1,11 @@
+[Unit]
+Description=Can Reader
+
+[Service]
+User=root
+Restart=always
+RestartSec=5
+ExecStart=/usr/bin/python3 -m tedge_can.reader -l /var/log/tedge-can-plugin/can.log
+
+[Install]
+WantedBy=multi-user.target
