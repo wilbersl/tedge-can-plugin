@@ -106,39 +106,30 @@ class CanMapper:
         start_bit = register_def["startBit"]
         field_len = register_def["noBits"]
         is_little_endian = register_def.get("littleendian") or False
-        register_type = "r"
         register_key = f'{register_def["number"]}:{register_def["startBit"]}'
         self.validate(register_def)
-##        # concat the registers in case we need to read across multiple registers
-##        print(read_register.data)
-##        buffer = self.buffer_register(
-##            read_register, is_little_endian, is_little_word_endian
-##        )
-##        buffer_len = len(read_register) * 16
-##        # shift and mask for the cases where the start_bit > 0 and
-##        # we are not reading the whole register as value
-##        buffer = buffer >> (buffer_len - (start_bit + field_len))
-##
-##        i = 1
-##        mask = 1
-##        while i < field_len:
-##            mask = (mask << 1) + 0x1
-##            i = i + 1
-##
-##        buffer = buffer & mask
-##        if register_def.get("datatype") == "float":
-##            value = self.parse_float(buffer, field_len)
-##        else:
-##            value = self.parse_int(buffer, register_def.get("signed"), mask)
-        print(read_register.data)
-        value = self.extract_can_value(
-            read_register.data,
-            start_bit,
-            field_len,
-            register_def.get("datatype","int"),
-            register_def.get("signed"),
-            is_little_endian,)
-        print(f"Extracted value: {value}")
+        # concat the registers in case we need to read across multiple registers
+        buffer = self.buffer_register(
+            read_register, is_little_endian
+        )
+        buffer_len = len(read_register) * 8
+
+        # shift and mask for the cases where the start_bit > 0 and
+        # we are not reading the whole register as value
+        buffer = buffer >> (buffer_len - (start_bit + field_len))
+
+        i = 1
+        mask = 1
+        while i < field_len:
+            mask = (mask << 1) + 0x1
+            i = i + 1
+
+        buffer = buffer & mask
+        if register_def.get("datatype") == "float":
+            value = self.parse_float(buffer, field_len)
+        else:
+            value = self.parse_int(buffer, register_def.get("signed"), mask)
+
         if register_def.get("measurementmapping") is not None:
             scaled_value = (
                 value
@@ -149,10 +140,10 @@ class CanMapper:
 
             on_change = register_def.get("on_change", False)
 
-            last_value = self.data.get(register_type, {}).get(register_key)
+            last_value = self.data.get(register_key)
 
             has_changed = False
-            last_value = self.data.get(register_type, {}).get(register_key)
+            last_value = self.data.get(register_key)
 
             if last_value is not None:
                 if isinstance(scaled_value, float):
@@ -189,87 +180,23 @@ class CanMapper:
         if register_def.get("alarmmapping") is not None:
             messages.extend(
                 self.check_alarm(
-                    value, register_def.get("alarmmapping"), register_type, register_key
+                    value, register_def.get("alarmmapping"), register_key
                 )
             )
         if register_def.get("eventmapping") is not None:
             messages.extend(
                 self.check_event(
-                    value, register_def.get("eventmapping"), register_type, register_key
+                    value, register_def.get("eventmapping"), register_key
                 )
             )
 
-        self.data.setdefault(register_type, {})[register_key] = value
-
+        self.data[register_key] = value
         return messages, separate_measurement
-    
 
-
-    def extract_can_value(self, data: bytes, start_bit: int, bit_length: int,
-                          datatype: str = "int", signed: bool = True, littleendian: bool = True):
-        """
-        Extrahiert ein Signal aus einem CAN-Frame anhand von Startbit, Bitlänge und Datentyp.
-
-        Args:
-            data (bytes): CAN-Datenbytes (z. B. msg.data)
-            start_bit (int): Startbit im Frame (0 = MSB oder LSB, je nach Endianness)
-            bit_length (int): Anzahl der Bits des Signals
-            datatype (str): z. B. "int", "float"
-            signed (bool): Nur für Integer: True = vorzeichenbehaftet, False = vorzeichenlos
-            littleendian (bool): True = Intel-Format (Little Endian), False = Motorola (Big Endian)
-
-        Returns:
-            value (int | float): dekodierter Wert
-        """
-
-        # In Integer umwandeln, um bitweise zu arbeiten
-        if littleendian:
-            buffer = int.from_bytes(data, byteorder="little")
-        else:
-            buffer = int.from_bytes(data, byteorder="big")
-
-        # Bit-Shift um auf das gewünschte Signal zu kommen
-        buffer = buffer >> start_bit
-        mask = (1 << bit_length) - 1
-        raw_value = buffer & mask
-
-        if bit_length >= 16:
-            bits = 16
-        elif bit_length >= 32:
-            bits = 32
-        else:
-            bits = 64
-        
-        # Datentyp-Interpretation
-        if datatype == "int":
-            if signed:
-                sign_bit = 1 << (bits - 1)
-                if raw_value & sign_bit:
-                    raw_value -= (1 << bits)
-            else:
-                value = raw_value
-        
-        elif datatype == "float":
-            byte_len = bits // 8
-            print(f"raw_value: {raw_value}, byte_len: {byte_len}, littleendian: {littleendian}")
-            raw_bytes = raw_value.to_bytes(byte_len, byteorder="little" if littleendian else "big")
-            if bits == 32:
-                value = struct.unpack("<f" if littleendian else ">f", raw_bytes)[0]
-            elif bits == 64:
-                value = struct.unpack("<d" if littleendian else ">d", raw_bytes)[0]
-            else:
-                raise ValueError("Unsupported float size")
-        else:
-            raise ValueError("Unknown datatype")
-        print(f"Extracted value: {value}")
-
-        return value
-
-
-    def check_alarm(self, value, alarm_mapping, register_type, register_key):
+    def check_alarm(self, value, alarm_mapping, register_key):
         """Check alarm"""
         messages = []
-        old_data = self.data.get(register_type).get(register_key)
+        old_data = self.data.get(register_key)
         # raise alarm if bit is 1
         if (old_data is None or old_data == 0) and value > 0:
             severity = alarm_mapping["severity"].lower()
@@ -286,10 +213,10 @@ class CanMapper:
             messages.append(MappedMessage(json.dumps(data), topic))
         return messages
 
-    def check_event(self, value, event_mapping, register_type, register_key):
+    def check_event(self, value, event_mapping, register_key):
         """Check event"""
         messages = []
-        old_data = self.data.get(register_type).get(register_key)
+        old_data = self.data.get(register_key)
         # raise event if value changed
         if old_data is None or old_data != value:
             eventtype = event_mapping.get("type", "")
@@ -301,3 +228,20 @@ class CanMapper:
             messages.append(MappedMessage(json.dumps(data), topic))
         return messages
 
+    @staticmethod
+    def buffer_register(register: list, is_little_word_endian):
+        """Buffer register"""
+        buf = 0x00
+
+        if is_little_word_endian:
+            for reg in reversed(register):
+                buf = (
+                    (buf << 8) | reg 
+                )
+        else:
+            for reg in register:
+                buf = (
+                    (buf << 8) | reg 
+                )
+
+        return buf
