@@ -1,35 +1,23 @@
 [[device]]
-name = "connectedge_test_device"
+name = "test_device"
 channel = "can0"
 
 [[device.registers]]
-number = "0xA1"
-input = false
-divisor = 1
-unit = ""
-decimalPlaces = 0
-offset = 0
-multiplier = 1
-startBit = 0
-noBits = 64
-name = "Test"
-signed = false
-id = "7292838253431274"
-measurementmapping.templatestring="{\"Waterpump\":{\"Temperature\":%% }}" 
-eventmapping.text="This event should be created on value change"
-eventmapping.type="TestEvent"
+number = "0x18FEEE81"
+offset = -30
+factor = 1
+startBit = 16
+noBits = 16
+on_change = false       #default false
+datatype = "integer"    #default integer / optionally float
+signed = false          #default unsigned(false) / optionally signed(true) ;only integer
+measurementmapping.templatestring="{\"OQS_Sensor\":{\"Temperature\":%% }}" 
+
 
 [[device.registers]]
-number = "0xA2"
-input = false
-divisor = 1
-unit = ""
-decimalPlaces = 0
+number = "0x18FEFF81"
 offset = 0
-multiplier = 1
-startBit = 0
-noBits = 16
-name = "Test"
-signed = true
-id = "7292838253431274"
-measurementmapping.templatestring="{\"Waterpump\":{\"Power\":%% }}" 
+factor = 10
+startBit = 40
+noBits = 8
+measurementmapping.templatestring="{\"OQS_Sensor\":{\"Oilquality\":%% }}" 

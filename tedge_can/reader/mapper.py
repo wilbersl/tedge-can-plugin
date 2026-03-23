@@ -76,7 +76,7 @@ class CanMapper:
                 f"definition of field length too long ({field_len}) "
                 f'for register {register_def["number"]} at {start_bit}'
             )
-        if register_def.get("datatype") == "float" and field_len not in (16, 32, 64):
+        if register_def.get("datatype", "integer") == "float" and field_len not in (16, 32, 64):
             raise ValueError("float values must have a length of 16, 32 or 64")
 
     def parse_int(self, buffer, signed, mask):
@@ -97,7 +97,7 @@ class CanMapper:
         )[0]
 
     def map_register(
-        self, read_register, register_def, device_combine_measurements=False
+        self, read_register, register_def: dict, device_combine_measurements=False
     ):
         """Map register"""
         # pylint: disable=too-many-locals
@@ -105,7 +105,7 @@ class CanMapper:
         separate_measurement = None
         start_bit = register_def["startBit"]
         field_len = register_def["noBits"]
-        is_little_endian = register_def.get("littleendian") or False
+        is_little_endian = register_def.get("littleendian", False)
         register_key = f'{register_def["number"]}:{register_def["startBit"]}'
         self.validate(register_def)
         # concat the registers in case we need to read across multiple registers
@@ -123,18 +123,13 @@ class CanMapper:
             i = i + 1
 
         buffer = buffer & mask
-        if register_def.get("datatype") == "float":
+        if register_def.get("datatype", "integer") == "float":
             value = self.parse_float(buffer, field_len)
         else:
-            value = self.parse_int(buffer, register_def.get("signed"), mask)
+            value = self.parse_int(buffer, register_def.get("signed", False), mask)
 
         if register_def.get("measurementmapping") is not None:
-            scaled_value = (
-                value
-                * (register_def.get("multiplier") or 1)
-                * (10 ** (register_def.get("decimalshiftright") or 0))
-                / (register_def.get("divisor") or 1)
-            ) + (register_def.get("offset") or 0)
+            scaled_value = value * register_def.get("factor", 1) + register_def.get("offset", 0)
 
             on_change = register_def.get("on_change", False)
 
