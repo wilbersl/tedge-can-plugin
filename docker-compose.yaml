@@ -1,0 +1,27 @@
+version: "3"
+services:
+  simulator:
+    build:
+      dockerfile: images/simulator/Dockerfile
+      context: .
+    ports:
+      - "8080:8080"
+    cap_add:
+      - NET_ADMIN
+    command: >
+      sh -c "
+      ip link add dev vcan0 type vcan &&
+      ip link set up vcan0 &&
+      python simulator.py
+      "
+  tedge:
+    build:
+      dockerfile: images/tedge/Dockerfile
+      context: .
+    privileged: true
+    #network_mode: "service:simulator"
+    cap_add:
+      - NET_ADMIN
+    ports:
+      - "1883:1883"
+      - "8001:8001"
