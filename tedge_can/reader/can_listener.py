@@ -1,6 +1,9 @@
-import can
+#!/usr/bin/env python3
+"""Can Lister"""
+import logging
 import threading
 import copy
+import can
 
 class CanBusBuffer:
     """
@@ -32,8 +35,10 @@ class CanBusBuffer:
     def _read_loop(self) -> None:
         """Endlos-Loop zum Lesen von CAN-Nachrichten"""
         while self.running:
+            print("Waiting for CAN messages...")
             msg = self.bus.recv(timeout=1.0)
             if msg:
+                print(msg)
                 msg_dict = {
                     "data": msg.data,
                     "timestamp": msg.timestamp,
@@ -43,7 +48,7 @@ class CanBusBuffer:
 
     def get_latest(self, can_id):
         """Gibt die letzte Nachricht einer CAN-ID zurück (oder None)"""
-        with self._lock: # thread-safe read
+        with self._lock:  # thread-safe read
             return self.latest_messages.get(can_id)
 
     def get_all_latest(self) -> dict[int, dict[str, object]]:
@@ -71,3 +76,13 @@ class CanBusBuffer:
         except can.CanError as e:
             print(f"Sendefehler: {e}")
             return False
+
+if __name__ == "__main__":
+    can_buffer = CanBusBuffer(channel="vcan0")
+    can_buffer.start()
+
+    try:
+        while True:
+            pass
+    except KeyboardInterrupt:
+        can_buffer.stop()

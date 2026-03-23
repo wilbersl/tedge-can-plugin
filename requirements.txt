@@ -1,0 +1,6 @@
+paho-mqtt~=1.6.1
+python-can
+watchdog~=2.1.9
+tomli~=2.0.1
+requests~=2.32.0
+toml

@@ -24,6 +24,7 @@ DEFAULT_FILE_DIR = "/etc/tedge/plugins/can"
 BASE_CONFIG_NAME = "can.toml"
 DEVICES_CONFIG_NAME = "devices.toml"
 
+
 class CanPoll:
     """Can Poller"""
 
@@ -104,7 +105,11 @@ class CanPoll:
                 self.canBusBuffers.popitem()[1].stop()
             for interface in self.base_config["can"]:
                 try:
-                    connection = CanBusBuffer(channel = interface["channel"],bustype= interface["bustype"], bitrate=interface["bitrate"])
+                    connection = CanBusBuffer(
+                        channel=interface["channel"],
+                        bustype=interface["bustype"],
+                        bitrate=interface["bitrate"],
+                    )
                     connection.start()
                     self.canBusBuffers[interface["channel"]] = connection
                 except Exception as err:
@@ -155,17 +160,21 @@ class CanPoll:
             self.base_config["service"].get("combinemeasurements", False),
         )
         combined_measuerement = None
-        canBusBuffer = self.canBusBuffers.get(device.get("channel"))
-        if device.get("registers") is not None and canBusBuffer is not None:
-            canData = canBusBuffer.get_all_latest()
+        can_bus_buffer = self.canBusBuffers.get(device.get("channel"))
+        self.logger.debug("CAN data: %s", str(can_bus_buffer.get_all_latest()))
+        if device.get("registers") is not None and can_bus_buffer is not None:
+            can_data = can_bus_buffer.get_all_latest()
+            self.logger.debug("CAN data: %s", str(can_data))
             for register_definition in device["registers"]:
                 try:
-                    msg_id = int(register_definition["number"],base=16)
-                    result = canData.get(msg_id, None)
+                    msg_id = int(register_definition["number"], base=16)
+                    result = can_data.get(msg_id, None)
                     self.logger.debug("Data: %s", str(result))
                     if result is not None:
                         msgs, temp = mapper.map_register(
-                            result["data"], register_definition, device_combine_measurements
+                            result["data"],
+                            register_definition,
+                            device_combine_measurements,
                         )
                         if combined_measuerement is not None and temp is not None:
                             combined_measuerement.extend_data(temp)
@@ -307,6 +316,7 @@ def main():
     except Exception as main_err:
         logging.error("Unexpected error. %s", main_err, exc_info=True)
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

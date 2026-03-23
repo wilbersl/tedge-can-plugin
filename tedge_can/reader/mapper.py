@@ -109,9 +109,7 @@ class CanMapper:
         register_key = f'{register_def["number"]}:{register_def["startBit"]}'
         self.validate(register_def)
         # concat the registers in case we need to read across multiple registers
-        buffer = self.buffer_register(
-            read_register, is_little_endian
-        )
+        buffer = self.buffer_register(read_register, is_little_endian)
         buffer_len = len(read_register) * 8
 
         # shift and mask for the cases where the start_bit > 0 and
@@ -179,15 +177,11 @@ class CanMapper:
             value = scaled_value
         if register_def.get("alarmmapping") is not None:
             messages.extend(
-                self.check_alarm(
-                    value, register_def.get("alarmmapping"), register_key
-                )
+                self.check_alarm(value, register_def.get("alarmmapping"), register_key)
             )
         if register_def.get("eventmapping") is not None:
             messages.extend(
-                self.check_event(
-                    value, register_def.get("eventmapping"), register_key
-                )
+                self.check_event(value, register_def.get("eventmapping"), register_key)
             )
 
         self.data[register_key] = value
@@ -235,13 +229,9 @@ class CanMapper:
 
         if is_little_word_endian:
             for reg in reversed(register):
-                buf = (
-                    (buf << 8) | reg 
-                )
+                buf = (buf << 8) | reg
         else:
             for reg in register:
-                buf = (
-                    (buf << 8) | reg 
-                )
+                buf = (buf << 8) | reg
 
         return buf

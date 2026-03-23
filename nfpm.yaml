@@ -1,0 +1,72 @@
+# yaml-language-server: $schema=https://nfpm.goreleaser.com/static/schema.json
+---
+# nfpm configuration file
+#
+# check https://nfpm.goreleaser.com/configuration for detailed usage
+#
+name: "tedge-can-plugin"
+arch: "all"
+platform: "linux"
+version: ${VERSION}
+section: "default"
+priority: "extra"
+maintainer: wilbers@a-storm.com
+description: "CAN plugin for the thin-edge.io"
+homepage: "https://github.com/wilbersl/tedge-can-plugin"
+license: "Apache-2.0"
+
+contents:
+# CAN reader files
+- src: ./tedge_can/
+  dst: /usr/lib/python3/dist-packages/tedge_can
+
+# operation handlers
+- src: ./operations/*
+  dst: /etc/tedge/operations/c8y/
+  file_info:
+    mode: 0644
+
+# Example CAN config
+- src: config/can.toml
+  dst: /etc/tedge/plugins/can/can.toml
+  type: config|noreplace
+  file_info:
+    owner: tedge
+    group: tedge
+    mode: 0644
+
+# Example device config
+- src: config/devices.toml
+  dst: /etc/tedge/plugins/can/devices.toml
+  type: config|noreplace
+  file_info:
+    owner: tedge
+    group: tedge
+    mode: 0644
+
+# SystemD Unit File
+- src: ./tedge-can-plugin.service
+  dst: /lib/systemd/system/tedge-can-plugin.service
+  file_info:
+      mode: 0644
+      owner: root
+
+  # Logfile folder
+- dst: /var/log/tedge-can-plugin
+  type: dir
+
+overrides:
+  deb:
+    depends:
+      - tedge (>= 1.2.0)
+      - python (>= 3.8.0) | python3 (>= 3.8.0)
+      - python3-paho-mqtt
+      - python3-watchdog
+      - python3-can
+      - python3-tomli
+      - python3-toml
+      - python3-requests
+    scripts:
+      postinstall: ./scripts/deb/postinst
+      preremove: ./scripts/deb/prerm
+      postremove: ./scripts/deb/postrm
