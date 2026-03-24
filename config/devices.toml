@@ -7,12 +7,11 @@ number = "0x18FEEE81"
 offset = -30
 factor = 1
 startBit = 16
-noBits = 16
+noBits = 8
 on_change = false       #default false
 datatype = "integer"    #default integer / optionally float
 signed = false          #default unsigned(false) / optionally signed(true) ;only integer
 measurementmapping.templatestring="{\"OQS_Sensor\":{\"Temperature\":%% }}" 
-
 
 [[device.registers]]
 number = "0x18FEFF81"
