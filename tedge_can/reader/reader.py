@@ -109,7 +109,7 @@ class CanPoll:
                         channel=interface["channel"],
                         bustype=interface["bustype"],
                         bitrate=interface["bitrate"],
-                        listen_only=interface.get("listenonly", True)
+                        listen_only=interface.get("listenonly", True),
                     )
                     connection.start()
                     self.canBusBuffers[interface["channel"]] = connection

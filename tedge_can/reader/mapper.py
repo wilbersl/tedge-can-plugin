@@ -76,7 +76,11 @@ class CanMapper:
                 f"definition of field length too long ({field_len}) "
                 f'for register {register_def["number"]} at {start_bit}'
             )
-        if register_def.get("datatype", "integer") == "float" and field_len not in (16, 32, 64):
+        if register_def.get("datatype", "integer") == "float" and field_len not in (
+            16,
+            32,
+            64,
+        ):
             raise ValueError("float values must have a length of 16, 32 or 64")
 
     def parse_int(self, buffer, signed, mask):
@@ -85,9 +89,10 @@ class CanMapper:
         # Calculate the number of bytes needed for the field
         byte_length = (field_len + 7) // 8
 
-        # Convert masked value to bytes, reverse, and convert back to integer / compatiblity with DBC Littleendian Byteorder and Masking
-        value_bytes = buffer.to_bytes(byte_length, byteorder='big')
-        buffer = int.from_bytes(value_bytes, byteorder='little', signed=False)
+        # Convert masked value to bytes, reverse, and convert back to integer /
+        # compatiblity with DBC Littleendian Byteorder and Masking
+        value_bytes = buffer.to_bytes(byte_length, byteorder="big")
+        buffer = int.from_bytes(value_bytes, byteorder="little", signed=False)
 
         # Now check for negative values and apply signed logic for non standard length integer
         is_negative = buffer >> (field_len - 1) & 0x01
@@ -137,7 +142,9 @@ class CanMapper:
             value = self.parse_int(buffer, register_def.get("signed", False), mask)
 
         if register_def.get("measurementmapping") is not None:
-            scaled_value = value * register_def.get("factor", 1) + register_def.get("offset", 0)
+            scaled_value = value * register_def.get("factor", 1) + register_def.get(
+                "offset", 0
+            )
 
             on_change = register_def.get("on_change", False)
 

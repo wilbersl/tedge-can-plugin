@@ -38,36 +38,6 @@ def update_or_create_device_mapping(target: CanDevice, mapping, new_mapping):
 def get_device_from_mapping(target: CanDevice, mapping):
     """Get a device from a given mapping definition"""
     device = {"name": target.child_name, "registers": mapping["c8y_Registers"]}
-    '''
-    for i, c8y_register in enumerate(mapping["c8y_Registers"]):
-        logger.debug(device)
-        device["registers"][i]["number"] = c8y_register["number"]
-        device["registers"][i]["startbit"] = c8y_register["startBit"]
-        device["registers"][i]["nobits"] = c8y_register["noBits"]
-        device["registers"][i]["signed"] = c8y_register["signed"]
-        device["registers"][i]["multiplier"] = c8y_register["multiplier"]
-        device["registers"][i]["divisor"] = c8y_register["divisor"]
-        device["registers"][i]["decimalshiftright"] = c8y_register["offset"]
-        device["registers"][i]["input"] = c8y_register["input"]
-        # Measurements
-        if "measurementMapping" in c8y_register:
-            # device["registers"][i]['measurementmapping'] = {}
-            measurement_mapping = {}
-            meas_type = c8y_register["measurementMapping"]["type"]
-            meas_series = c8y_register["measurementMapping"]["series"]
-            measurement_mapping["templatestring"] = (
-                f'{{"{meas_type}":{{"{meas_series}":%%}}}}'
-            )
-            device["registers"][i]["measurementmapping"] = measurement_mapping
-        # Alarms
-        if "alarmMapping" in c8y_register:
-            # device["registers"][i]['measurementmapping'] = {}
-            alarm_mapping = {}
-            alarm_mapping["type"] = c8y_register["alarmMapping"]["type"]
-            alarm_mapping["text"] = c8y_register["alarmMapping"]["text"]
-            alarm_mapping["severity"] = c8y_register["alarmMapping"]["severity"]
-            device["registers"][i]["alarmmapping"] = alarm_mapping
-    '''
     return device
 
 
