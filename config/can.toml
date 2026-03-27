@@ -2,6 +2,7 @@
 channel = "can0"
 bustype = "socketcan"
 bitrate = 500000
+listenonly = false
 
 [thinedge]
 mqtthost = "127.0.0.1"

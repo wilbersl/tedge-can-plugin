@@ -80,8 +80,16 @@ class CanMapper:
             raise ValueError("float values must have a length of 16, 32 or 64")
 
     def parse_int(self, buffer, signed, mask):
-        """parse value to an integer"""
+        """parse value to an integer, reversing byte order after masking"""
         field_len = mask.bit_length()
+        # Calculate the number of bytes needed for the field
+        byte_length = (field_len + 7) // 8
+
+        # Convert masked value to bytes, reverse, and convert back to integer / compatiblity with DBC Littleendian Byteorder and Masking
+        value_bytes = buffer.to_bytes(byte_length, byteorder='big')
+        buffer = int.from_bytes(value_bytes, byteorder='little', signed=False)
+
+        # Now check for negative values and apply signed logic for non standard length integer
         is_negative = buffer >> (field_len - 1) & 0x01
         if signed and is_negative:
             value = -(((buffer ^ mask) + 1) & mask)

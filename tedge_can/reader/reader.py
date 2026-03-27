@@ -109,6 +109,7 @@ class CanPoll:
                         channel=interface["channel"],
                         bustype=interface["bustype"],
                         bitrate=interface["bitrate"],
+                        listen_only=interface.get("listenonly", True)
                     )
                     connection.start()
                     self.canBusBuffers[interface["channel"]] = connection
@@ -161,7 +162,6 @@ class CanPoll:
         )
         combined_measuerement = None
         can_bus_buffer = self.canBusBuffers.get(device.get("channel"))
-        self.logger.debug("CAN data: %s", str(can_bus_buffer.get_all_latest()))
         if device.get("registers") is not None and can_bus_buffer is not None:
             can_data = can_bus_buffer.get_all_latest()
             self.logger.debug("CAN data: %s", str(can_data))
@@ -169,7 +169,6 @@ class CanPoll:
                 try:
                     msg_id = int(register_definition["number"], base=16)
                     result = can_data.get(msg_id, None)
-                    self.logger.debug("Data: %s", str(result))
                     if result is not None:
                         msgs, temp = mapper.map_register(
                             result["data"],

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Can Lister"""
-import logging
 import threading
 import copy
 import can
+import subprocess
 
 class CanBusBuffer:
     """
@@ -12,7 +12,31 @@ class CanBusBuffer:
     und auch Nachrichten senden kann.
     """
 
-    def __init__(self, channel="can0", bustype="socketcan", bitrate=500000):
+    def __init__(self, channel="can0", bustype="socketcan", bitrate=500000, listen_only = True):
+        if bustype=="socketcan":
+            try:
+                subprocess.run(
+                    ["sudo", "ip", "link", "set", channel, "down"],
+                    check=True
+                )
+                print(f"{channel} ist jetzt DOWN.")
+            except subprocess.CalledProcessError as e:
+                print(f"Fehler beim Abschalten von {channel}: {e}")
+            try:
+                if listen_only:
+                    subprocess.run(
+                        ["sudo", "ip", "link", "set", channel, "up", "type", "can", "bitrate", str(bitrate), "listen-only", "on"],
+                        check=True
+                    )
+                else:
+                    subprocess.run(
+                        ["sudo", "ip", "link", "set", channel, "up", "type", "can", "bitrate", str(bitrate), "listen-only", "off"],
+                        check=True
+                    )
+                print(f"{channel} ist jetzt UP.")
+            except subprocess.CalledProcessError as e:
+                print(f"Fehler beim Hochsetzen von {channel}: {e}")
+
         self.bus = can.interface.Bus(channel=channel, bustype=bustype, bitrate=bitrate)
         self.latest_messages: dict[int, dict[str, object]] = {}
         self.running = False
@@ -34,6 +58,7 @@ class CanBusBuffer:
 
     def _read_loop(self) -> None:
         """Endlos-Loop zum Lesen von CAN-Nachrichten"""
+        
         while self.running:
             print("Waiting for CAN messages...")
             msg = self.bus.recv(timeout=1.0)
