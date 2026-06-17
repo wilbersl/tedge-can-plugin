@@ -5,6 +5,7 @@ import struct
 import sys
 import math
 from datetime import datetime, timezone
+import time
 from dataclasses import dataclass
 
 topics = {
@@ -20,15 +21,14 @@ class MappedMessage:
 
     data: str = ""
     topic: str = ""
-    time: str = datetime.now(timezone.utc).isoformat()
 
     def serialize(self):
         """Serialize message adding time if not present"""
         if "/cmd/" in self.topic:
             return self.data
         out = json.loads(self.data)
-        if "time" not in out:
-            out["time"] = self.time
+#        if "time" not in out:
+#            out["time"] = datetime.now(timezone.utc).isoformat()
         return json.dumps(out)
 
     def extend_data(self, other_message):
@@ -51,8 +51,8 @@ class MappedMessage:
         # Merge the dictionaries
         merged = merge(d1, d2)
 
-        if "time" not in merged:
-            merged["time"] = self.time
+#        if "time" not in merged:
+#            merged["time"] = datetime.now(timezone.utc).isoformat()
 
         # Convert the merged dictionary back to a JSON string and update self.data
         self.data = json.dumps(merged)
@@ -76,25 +76,12 @@ class CanMapper:
                 f"definition of field length too long ({field_len}) "
                 f'for register {register_def["number"]} at {start_bit}'
             )
-        if register_def.get("datatype", "integer") == "float" and field_len not in (
-            16,
-            32,
-            64,
-        ):
+        if register_def.get("datatype", "integer") == "float" and field_len not in (16, 32, 64):
             raise ValueError("float values must have a length of 16, 32 or 64")
 
     def parse_int(self, buffer, signed, mask):
-        """parse value to an integer, reversing byte order after masking"""
+        """parse value to an integer"""
         field_len = mask.bit_length()
-        # Calculate the number of bytes needed for the field
-        byte_length = (field_len + 7) // 8
-
-        # Convert masked value to bytes, reverse, and convert back to integer /
-        # compatiblity with DBC Littleendian Byteorder and Masking
-        value_bytes = buffer.to_bytes(byte_length, byteorder="big")
-        buffer = int.from_bytes(value_bytes, byteorder="little", signed=False)
-
-        # Now check for negative values and apply signed logic for non standard length integer
         is_negative = buffer >> (field_len - 1) & 0x01
         if signed and is_negative:
             value = -(((buffer ^ mask) + 1) & mask)
@@ -109,25 +96,38 @@ class CanMapper:
             formats[field_len], buffer.to_bytes(int(field_len / 8), sys.byteorder)
         )[0]
 
+    def is_old_data(self, data_timestamp, register_def, register_key):
+        """Check if data is old"""
+        last_send = self.data.get(register_key, {}).get("timestamp")
+        age_limit = register_def.get("agelimit")
+        if last_send is not None and age_limit is not None:
+            age = (time.time() - data_timestamp)
+            if age > age_limit:
+                return True
+        return False
+
     def map_register(
-        self, read_register, register_def: dict, device_combine_measurements=False
-    ):
+        self, read_register, register_def: dict, send_old_data=False):
         """Map register"""
         # pylint: disable=too-many-locals
         messages = []
         separate_measurement = None
         start_bit = register_def["startBit"]
         field_len = register_def["noBits"]
-        is_little_endian = register_def.get("littleendian", False)
+        is_little_endian = register_def.get("littleendian", True)
         register_key = f'{register_def["number"]}:{register_def["startBit"]}'
         self.validate(register_def)
+
+        if self.is_old_data(read_register["timestamp"], register_def, register_key) and not send_old_data:
+            return [], None
+        
         # concat the registers in case we need to read across multiple registers
-        buffer = self.buffer_register(read_register, is_little_endian)
-        buffer_len = len(read_register) * 8
+        raw_data = read_register["data"]
+        buffer = self.buffer_register(raw_data, is_little_endian)
 
         # shift and mask for the cases where the start_bit > 0 and
         # we are not reading the whole register as value
-        buffer = buffer >> (buffer_len - (start_bit + field_len))
+        buffer = buffer >> start_bit
 
         i = 1
         mask = 1
@@ -142,16 +142,20 @@ class CanMapper:
             value = self.parse_int(buffer, register_def.get("signed", False), mask)
 
         if register_def.get("measurementmapping") is not None:
-            scaled_value = value * register_def.get("factor", 1) + register_def.get(
-                "offset", 0
-            )
+            scaled_value = value * register_def.get("factor", 1) + register_def.get("offset", 0)
+
+            if register_def.get("min") is not None:
+                if scaled_value < register_def.get("min"):
+                    return messages, separate_measurement
+
+            if register_def.get("max") is not None:
+                if scaled_value > register_def.get("max"):
+                    return messages, separate_measurement
 
             on_change = register_def.get("on_change", False)
 
-            last_value = self.data.get(register_key)
-
             has_changed = False
-            last_value = self.data.get(register_key)
+            last_value = self.data.get(register_key, {}).get("data")
 
             if last_value is not None:
                 if isinstance(scaled_value, float):
@@ -165,9 +169,7 @@ class CanMapper:
                 data = register_def["measurementmapping"]["templatestring"].replace(
                     "%%", str(scaled_value)
                 )
-                if register_def["measurementmapping"].get(
-                    "combinemeasurements", device_combine_measurements
-                ):
+                if register_def["measurementmapping"].get("combinemeasurements", False):
                     separate_measurement = MappedMessage(
                         data,
                         topics["measurement"].replace(
@@ -194,13 +196,13 @@ class CanMapper:
                 self.check_event(value, register_def.get("eventmapping"), register_key)
             )
 
-        self.data[register_key] = value
+        self.data[register_key] = {"data": value, "timestamp": read_register["timestamp"]}
         return messages, separate_measurement
 
     def check_alarm(self, value, alarm_mapping, register_key):
         """Check alarm"""
         messages = []
-        old_data = self.data.get(register_key)
+        old_data = self.data.get(register_key, {}).get("data")
         # raise alarm if bit is 1
         if (old_data is None or old_data == 0) and value > 0:
             severity = alarm_mapping["severity"].lower()
@@ -220,7 +222,7 @@ class CanMapper:
     def check_event(self, value, event_mapping, register_key):
         """Check event"""
         messages = []
-        old_data = self.data.get(register_key)
+        old_data = self.data.get(register_key, {}).get("data")
         # raise event if value changed
         if old_data is None or old_data != value:
             eventtype = event_mapping.get("type", "")

@@ -1,6 +1,8 @@
 [[device]]
 name = "test_device"
 channel = "can0"
+agelimit = 120
+olddatainterval = 600
 
 [[device.registers]]
 number = "0x18FEEE81"
@@ -8,7 +10,10 @@ offset = -30
 factor = 1
 startBit = 16
 noBits = 8
+min = -30
+max = 130
 unit = "°C"
+agelimit = 60
 on_change = false       #default false
 datatype = "integer"    #default integer / optionally float
 signed = false          #default unsigned(false) / optionally signed(true) ;only integer

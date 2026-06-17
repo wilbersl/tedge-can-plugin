@@ -52,6 +52,7 @@ class CanPoll:
     devices = []
     config_dir = "."
     canBusBuffers = {}
+    old_data_timer = time.time()
 
     def __init__(self, config_dir=".", logfile=None):
         self.config_dir = config_dir
@@ -82,6 +83,17 @@ class CanPoll:
         new_devices = self.read_device_definition(
             f"{self.config_dir}/{DEVICES_CONFIG_NAME}"
         )
+        for device in new_devices["device"]:
+            device_agelimit = device.get("agelimit",new_base_config["service"].get("agelimit"))
+            device_combine_measurements = device.get("combinemeasurements",
+                self.base_config["service"].get("combinemeasurements", False),
+                )
+            for register in device.get("registers", []):
+                if register.get("agelimit") is None:
+                    register["agelimit"] = device_agelimit
+                if register.get("combinemeasurements") is None:
+                    register["combinemeasurements"] = device_combine_measurements
+
         if (
             len(new_devices) >= 1
             and new_devices.get("device")
@@ -108,8 +120,9 @@ class CanPoll:
                     connection = CanBusBuffer(
                         channel=interface["channel"],
                         bustype=interface["bustype"],
-                        bitrate=interface["bitrate"],
-                        listen_only=interface.get("listenonly", True),
+                        bitrate=interface.get("bitrate"),
+                        listen_only=interface.get("listenonly"),
+                        termination=interface.get("termination")
                     )
                     connection.start()
                     self.canBusBuffers[interface["channel"]] = connection
@@ -156,11 +169,11 @@ class CanPoll:
     def process_data(self, device, mapper):
         """Read Can msgs out of data"""
         self.logger.debug("Processing data for device %s", device["name"])
-        device_combine_measurements = device.get(
-            "combinemeasurements",
-            self.base_config["service"].get("combinemeasurements", False),
-        )
         combined_measuerement = None
+        send_old_data = False
+        if (time.time() - self.old_data_timer) > device.get("olddatainterval"):
+            send_old_data = True
+            self.old_data_timer = time.time()
         can_bus_buffer = self.canBusBuffers.get(device.get("channel"))
         if device.get("registers") is not None and can_bus_buffer is not None:
             can_data = can_bus_buffer.get_all_latest()
@@ -171,9 +184,9 @@ class CanPoll:
                     result = can_data.get(msg_id, None)
                     if result is not None:
                         msgs, temp = mapper.map_register(
-                            result["data"],
+                            result,
                             register_definition,
-                            device_combine_measurements,
+                            send_old_data
                         )
                         if combined_measuerement is not None and temp is not None:
                             combined_measuerement.extend_data(temp)
@@ -249,6 +262,8 @@ class CanPoll:
 
                 client.connect(broker, port)
                 self.logger.debug("Connected to MQTT broker at %s:%d", broker, port)
+
+                client.loop_start()
 
                 return client
             except Exception as e:

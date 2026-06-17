@@ -4,17 +4,26 @@ import threading
 import copy
 import subprocess
 import can
-
+import time
 
 class CanBusBuffer:
     """
     CAN-Bus Reader, der kontinuierlich Nachrichten liest,
     ein Dictionary mit den neuesten Daten je CAN-ID pflegt
     und auch Nachrichten senden kann.
+
+    z. B. 'ip -d link show can0' zeigt die aktuellen Einstellungen von can0 an und ob termination einstellbar ist.
+
+    Args:
+    channel (str): CAN-Interface, z. B. 'can0'
+    bustype (str): CAN-Interface-Typ, z. B. 'socketcan'
+    bitrate (int): Optional, Bitrate des CAN-Busses, z. B. 250000
+    listen_only (bool): Optional, ob im Listen-Only-Modus betrieben werden soll
+    termination (int): Optional, Integrierter Abschlusswiderstand in Ohm (0, 120 oder None für unverändert/nicht unterstützt)
     """
 
     def __init__(
-        self, channel="can0", bustype="socketcan", bitrate=500000, listen_only=True
+        self, channel="can0", bustype="socketcan", bitrate: int | None=None, listen_only: bool | None=None, termination: int | None=None
     ):
         if bustype == "socketcan":
             try:
@@ -24,10 +33,9 @@ class CanBusBuffer:
                 print(f"{channel} ist jetzt DOWN.")
             except subprocess.CalledProcessError as e:
                 print(f"Fehler beim Abschalten von {channel}: {e}")
+                raise e
             try:
-                if listen_only:
-                    subprocess.run(
-                        [
+                command = [
                             "sudo",
                             "ip",
                             "link",
@@ -35,37 +43,26 @@ class CanBusBuffer:
                             channel,
                             "up",
                             "type",
-                            "can",
-                            "bitrate",
-                            str(bitrate),
-                            "listen-only",
-                            "on",
-                        ],
-                        check=True,
-                    )
-                else:
-                    subprocess.run(
-                        [
-                            "sudo",
-                            "ip",
-                            "link",
-                            "set",
-                            channel,
-                            "up",
-                            "type",
-                            "can",
-                            "bitrate",
-                            str(bitrate),
-                            "listen-only",
-                            "off",
-                        ],
-                        check=True,
-                    )
+                            "can"
+                ]
+
+                if bitrate is not None:
+                    command += ["bitrate", str(bitrate)]
+                if listen_only is not None:
+                    command += ["listen-only", "on" if listen_only else "off"]
+                if termination is not None:
+                    command += ["termination", str(termination)]
+
+                subprocess.run(
+                    command,
+                    check=True,
+                )
                 print(f"{channel} ist jetzt UP.")
             except subprocess.CalledProcessError as e:
                 print(f"Fehler beim Hochsetzen von {channel}: {e}")
+                raise e
 
-        self.bus = can.interface.Bus(channel=channel, bustype=bustype, bitrate=bitrate)
+        self.bus = can.interface.Bus(channel=channel, bustype=bustype)
         self.latest_messages: dict[int, dict[str, object]] = {}
         self.running = False
         self.thread: threading.Thread | None = None
@@ -88,10 +85,8 @@ class CanBusBuffer:
         """Endlos-Loop zum Lesen von CAN-Nachrichten"""
 
         while self.running:
-            print("Waiting for CAN messages...")
             msg = self.bus.recv(timeout=1.0)
             if msg:
-                print(msg)
                 msg_dict = {
                     "data": msg.data,
                     "timestamp": msg.timestamp,
@@ -132,11 +127,12 @@ class CanBusBuffer:
 
 
 if __name__ == "__main__":
-    can_buffer = CanBusBuffer(channel="vcan0")
+    can_buffer = CanBusBuffer(channel="can0", bitrate=250000, listen_only=False, termination=None)
     can_buffer.start()
 
     try:
         while True:
-            pass
+            print(can_buffer.get_all_latest())
+            time.sleep(1)
     except KeyboardInterrupt:
         can_buffer.stop()
