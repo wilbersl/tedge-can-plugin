@@ -120,7 +120,7 @@ class CanMapper:
 
         if self.is_old_data(read_register["timestamp"], register_def, register_key) and not send_old_data:
             return [], None
-        
+
         # concat the registers in case we need to read across multiple registers
         raw_data = read_register["data"]
         buffer = self.buffer_register(raw_data, is_little_endian)

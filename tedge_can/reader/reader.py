@@ -91,8 +91,11 @@ class CanPoll:
             for register in device.get("registers", []):
                 if register.get("agelimit") is None:
                     register["agelimit"] = device_agelimit
-                if register.get("combinemeasurements") is None:
-                    register["combinemeasurements"] = device_combine_measurements
+                if register.get("measurementmapping") is None:
+                    continue
+                if register["measurementmapping"].get("combinemeasurements") is None:
+                    register["measurementmapping"]["combinemeasurements"] = device_combine_measurements
+
 
         if (
             len(new_devices) >= 1
@@ -171,7 +174,7 @@ class CanPoll:
         self.logger.debug("Processing data for device %s", device["name"])
         combined_measuerement = None
         send_old_data = False
-        if (time.time() - self.old_data_timer) > device.get("olddatainterval"):
+        if (time.time() - self.old_data_timer) > device.get("olddatainterval", self.base_config["service"].get("olddatainterval", 0)):
             send_old_data = True
             self.old_data_timer = time.time()
         can_bus_buffer = self.canBusBuffers.get(device.get("channel"))
