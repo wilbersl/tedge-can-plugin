@@ -12,6 +12,7 @@ topics = {
     "measurement": "te/device/CHILD_ID///m/TYPE",
     "event": "te/device/CHILD_ID///e/TYPE",
     "alarm": "te/device/CHILD_ID///a/TYPE",
+    "raw": "local/device/CHILD_ID///raw/TYPE",
 }
 
 
@@ -120,7 +121,7 @@ class CanMapper:
 
         if self.is_old_data(read_register["timestamp"], register_def, register_key) and not send_old_data:
             return [], None
-
+        
         # concat the registers in case we need to read across multiple registers
         raw_data = read_register["data"]
         buffer = self.buffer_register(raw_data, is_little_endian)
@@ -184,6 +185,30 @@ class CanMapper:
                     separate_measurement = None
 
             value = scaled_value
+
+        if register_def.get("rawmapping") is not None:
+            on_change = register_def.get("on_change", False)
+            has_changed = False
+            last_value = self.data.get(register_key, {}).get("data")
+            if last_value is not None:
+                has_changed = last_value != value
+
+            if not on_change or last_value is None or has_changed:
+                data = f"{buffer:#0{2+field_len//4}x}"
+                topic = register_def["rawmapping"].get(
+                    "topic", topics["raw"]
+                )
+                topic = topic.replace("CHILD_ID", self.device.get("name"))
+                topic = topic.replace(
+                    "TYPE", register_def["rawmapping"].get("type", "")
+                )
+                messages.append(
+                    MappedMessage(
+                        data,
+                        topic
+                    )
+                )
+
         if register_def.get("alarmmapping") is not None:
             messages.extend(
                 self.check_alarm(value, register_def.get("alarmmapping"), register_key)
