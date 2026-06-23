@@ -96,7 +96,6 @@ class CanPoll:
                 if register["measurementmapping"].get("combinemeasurements") is None:
                     register["measurementmapping"]["combinemeasurements"] = device_combine_measurements
 
-
         if (
             len(new_devices) >= 1
             and new_devices.get("device")
@@ -174,7 +173,7 @@ class CanPoll:
         self.logger.debug("Processing data for device %s", device["name"])
         combined_measuerement = None
         send_old_data = False
-        if (time.time() - self.old_data_timer) > device.get("olddatainterval", self.base_config["service"].get("olddatainterval", 0)):
+        if (time.time() - self.old_data_timer) > device.get("olddatainterval", self.base_config["service"].get("olddatainterval",0)):
             send_old_data = True
             self.old_data_timer = time.time()
         can_bus_buffer = self.canBusBuffers.get(device.get("channel"))
@@ -299,16 +298,19 @@ class CanPoll:
     def register_child_devices(self, devices):
         """Register the child devices with thin-edge.io"""
         for device in devices:
-            self.logger.debug("Child device registration for device %s", device["name"])
             topic = f"te/device/{device['name']}//"
-            payload = {
-                "@type": "child-device",
-                "name": device["name"],
-                "type": "can-device",
-            }
-            self.send_tedge_message(
-                MappedMessage(json.dumps(payload), topic), retain=True, qos=1
-            )
+            if device["name"] != "main":
+                self.logger.debug(
+                    "Child device registration for device %s", device["name"]
+                )
+                payload = {
+                    "@type": "child-device",
+                    "name": device["name"],
+                    "type": "can-device",
+                }
+                self.send_tedge_message(
+                    MappedMessage(json.dumps(payload), topic), retain=True, qos=1
+                )
 
 
 def main():
