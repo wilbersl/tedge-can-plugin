@@ -1,23 +1,47 @@
 [[device]]
 name = "test_device"
 channel = "can0"
-agelimit = 120
-olddatainterval = 600
+transmitrate = 5            #default set in service, device specific send interval
+combinemeasurements = true  #default set in service, combines all measurements of a device to reduce the number of created measurements in the cloud
+agelimit = 120              #default set in service, how old buffered data can be before it's not send on the regular interval
+olddatainterval = 600       #default set in service, interval between two times sending data that is over it's agelimit
 
 [[device.registers]]
-number = "0x18FEEE81"
-offset = -30
-factor = 1
-startBit = 16
+number = "0x18FEEE81"       #CAN ID of the message
+offset = -30                #default 0, scaled_value = (value * factor) + offset 
+factor = 1                  #default 1, scaled_value = (value * factor) + offset 
+startBit = 16               
 noBits = 8
-min = -30
-max = 130
-unit = "°C"
-agelimit = 60
-on_change = false       #default false
-datatype = "integer"    #default integer / optionally float
-signed = false          #default unsigned(false) / optionally signed(true) ;only integer
-measurementmapping.templatestring="{\"OQS_Sensor\":{\"Temperature\":%% }}" 
+min = -30                   #optional, if scaled_value is below this no message is send
+max = 130                   #optional, if scaled_value is above this no message is send
+unit = "°C"                 #for future implementation of measurement metadata
+agelimit = 60               #default set in device, how old buffered data can be before it's not send on the regular interval
+on_change = false           #default false, send measurement and raw data only on change
+littleendian = true         #default true, are the bytes send in little endian format
+datatype = "integer"        #default integer / optionally float
+signed = false              #default unsigned(false) / optionally signed(true) ;only integer
+
+[measurementmapping]                        #send a measurement to the tedge mapper
+combinemeasurements = true                  #default set in device, combines all measurements of a device to reduce the number of created measurements in the cloud
+#type="TestMeasurement"                       #default ""
+#topic="local/device/CHILD_ID///m/TYPE"     #default "te/device/CHILD_ID///m/TYPE", MQTT topic send on, CHILD_ID is changed to the device.name and type to measurementmapping.type
+templatestring="{\"OQS_Sensor\":{\"Temperature\":%% }}" #'%%' is mapped to the scaled_value
+
+#[rawmapping]                               #send raw data as a HEX string to the MQTT Broker
+#type="encoding1"                           #default ""
+#topic="local/specialMapper/CHILD_ID/TYPE"  #default "local/device/CHILD_ID///raw/TYPE", MQTT topic send on, CHILD_ID is changed to the device.name and type to rawmapping.type
+
+#[alarmmapping]                              #send an alarm on value change from 0 to 1
+#severity="MAJOR"
+#type="TestAlarm"
+#topic="local/device/CHILD_ID///m/TYPE"     #default "te/device/CHILD_ID///a/TYPE", MQTT topic send on, CHILD_ID is changed to the device.name and type to alarmmapping.type
+#text="This alarm should be created once"
+
+#[eventmapping]                              #send an event on value change
+#type="TestEvent"
+#topic="local/device/CHILD_ID///e/TYPE"     #default "te/device/CHILD_ID///e/TYPE", MQTT topic send on, CHILD_ID is changed to the device.name and type to eventmapping.type
+#text="This alarm should be created once"
+
 
 [[device.registers]]
 number = "0x18FEFF81"

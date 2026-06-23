@@ -1,15 +1,17 @@
-[[can]]
+[[can]]                     #connected can interfaces
 channel = "can0"
 bustype = "socketcan"
-bitrate = 500000
-listenonly = false
-termination = 120
+bitrate = 250000            #optional, default not set on restart
+listenonly = true           #optional, default not set on restart, pure sniffer mode, CAN controller won't send acknowledgements or errors
+#termination = 120          #optional, default not set on restart, some hardware allows for a termination resistor to be set here
 
-[thinedge]
+[thinedge]                  #mqtt broker to send to
 mqtthost = "127.0.0.1"
 mqttport = 1883
 
-[service]
-loglevel = "DEBUG"
-transmitrate = 5
-combinemeasurements = true
+[service]                   #service wide configuration
+loglevel = "INFO"           #optional, default INFO
+transmitrate = 5            #regular send interval
+combinemeasurements = true  #optional, default False, combines all measurements of a device to reduce the number of created measurements in the cloud
+agelimit = 120              #default infinite seconds, how old buffered data can be before it's not send on the regular interval
+olddatainterval = 600       #default 0 seconds, interval between two times sending data that is over it's agelimit
