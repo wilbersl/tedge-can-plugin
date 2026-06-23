@@ -92,7 +92,7 @@ class CanBusBuffer:
                     "timestamp": msg.timestamp,
                 }
                 with self._lock:
-                    self.latest_messages[msg.arbitration_id] = msg_dict
+                    self.latest_messages[hex(msg.arbitration_id).casefold()] = msg_dict
 
     def get_latest(self, can_id):
         """Gibt die letzte Nachricht einer CAN-ID zurück (oder None)"""

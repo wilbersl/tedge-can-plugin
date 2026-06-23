@@ -182,8 +182,7 @@ class CanPoll:
             self.logger.debug("CAN data: %s", str(can_data))
             for register_definition in device["registers"]:
                 try:
-                    msg_id = int(register_definition["number"], base=16)
-                    result = can_data.get(msg_id, None)
+                    result = can_data.get(register_definition["number"].casefold(), None)
                     if result is not None:
                         msgs, temp = mapper.map_register(
                             result,
