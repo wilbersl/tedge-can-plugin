@@ -9,7 +9,7 @@ import time
 from dataclasses import dataclass
 
 topics = {
-    "measurement": "te/device/CHILD_ID///m/",
+    "measurement": "te/device/CHILD_ID///m/TYPE",
     "event": "te/device/CHILD_ID///e/TYPE",
     "alarm": "te/device/CHILD_ID///a/TYPE",
 }
@@ -169,22 +169,19 @@ class CanMapper:
                 data = register_def["measurementmapping"]["templatestring"].replace(
                     "%%", str(scaled_value)
                 )
-                if register_def["measurementmapping"].get("combinemeasurements", False):
-                    separate_measurement = MappedMessage(
-                        data,
-                        topics["measurement"].replace(
-                            "CHILD_ID", self.device.get("name")
-                        ),
-                    )
-                else:
-                    messages.append(
-                        MappedMessage(
-                            data,
-                            topics["measurement"].replace(
-                                "CHILD_ID", self.device.get("name")
-                            ),
-                        )
-                    )
+                topic = register_def["measurementmapping"].get(
+                    "topic", topics["measurement"]
+                )
+                topic = topic.replace("CHILD_ID", self.device.get("name"))
+                topic = topic.replace(
+                    "TYPE", register_def["measurementmapping"].get("type", "")
+                )
+
+                separate_measurement = MappedMessage(data, topic)
+
+                if not register_def["measurementmapping"].get("combinemeasurements", False):
+                    messages.append(separate_measurement)
+                    separate_measurement = None
 
             value = scaled_value
         if register_def.get("alarmmapping") is not None:
@@ -208,7 +205,7 @@ class CanMapper:
             severity = alarm_mapping["severity"].lower()
             alarm_type = alarm_mapping.get("type", "")
             text = alarm_mapping["text"]
-            topic = topics["alarm"]
+            topic = alarm_mapping.get("topic", topics["alarm"])
             topic = topic.replace("CHILD_ID", self.device.get("name"))
             topic = topic.replace("TYPE", alarm_type)
             data = {
@@ -227,7 +224,7 @@ class CanMapper:
         if old_data is None or old_data != value:
             eventtype = event_mapping.get("type", "")
             text = event_mapping["text"]
-            topic = topics["event"]
+            topic = event_mapping.get("topic", topics["event"])
             topic = topic.replace("CHILD_ID", self.device.get("name"))
             topic = topic.replace("TYPE", eventtype)
             data = {"text": text, "time": datetime.now(timezone.utc).isoformat()}
