@@ -21,23 +21,23 @@ littleendian = true         #default true, are the bytes send in little endian f
 datatype = "integer"        #default integer / optionally float
 signed = false              #default unsigned(false) / optionally signed(true) ;only integer
 
-[measurementmapping]                        #send a measurement to the tedge mapper
+[device.registers.measurementmapping]       #send a measurement to the tedge mapper
 combinemeasurements = true                  #default set in device, combines all measurements of a device to reduce the number of created measurements in the cloud
-#type="TestMeasurement"                       #default ""
+#type="TestMeasurement"                     #default ""
 #topic="local/device/CHILD_ID///m/TYPE"     #default "te/device/CHILD_ID///m/TYPE", MQTT topic send on, CHILD_ID is changed to the device.name and type to measurementmapping.type
 templatestring="{\"OQS_Sensor\":{\"Temperature\":%% }}" #'%%' is mapped to the scaled_value
 
-#[rawmapping]                               #send raw data as a HEX string to the MQTT Broker
+#[device.registers.rawmapping]              #send raw data as a HEX string to the MQTT Broker
 #type="encoding1"                           #default ""
 #topic="local/specialMapper/CHILD_ID/TYPE"  #default "local/device/CHILD_ID///raw/TYPE", MQTT topic send on, CHILD_ID is changed to the device.name and type to rawmapping.type
 
-#[alarmmapping]                              #send an alarm on value change from 0 to 1
+#[device.registers.alarmmapping]            #send an alarm on value change from 0 to 1
 #severity="MAJOR"
 #type="TestAlarm"
 #topic="local/device/CHILD_ID///m/TYPE"     #default "te/device/CHILD_ID///a/TYPE", MQTT topic send on, CHILD_ID is changed to the device.name and type to alarmmapping.type
 #text="This alarm should be created once"
 
-#[eventmapping]                              #send an event on value change
+#[device.registers.eventmapping]            #send an event on value change
 #type="TestEvent"
 #topic="local/device/CHILD_ID///e/TYPE"     #default "te/device/CHILD_ID///e/TYPE", MQTT topic send on, CHILD_ID is changed to the device.name and type to eventmapping.type
 #text="This alarm should be created once"
